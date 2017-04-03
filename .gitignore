@@ -1,0 +1,7 @@
+# Terraform stuff
+.terraform/
+terraform.tfstate*
+terraform.tfvars
+
+# User created files
+backend.tf
