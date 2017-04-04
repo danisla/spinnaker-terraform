@@ -42,7 +42,7 @@ resource "google_compute_firewall" "spinnaker-redis-fw" {
 
   allow {
     protocol = "tcp"
-    ports    = ["6379"]
+    ports    = ["6379","22"]
   }
 
   source_tags = ["spinnaker-vm"]
@@ -68,7 +68,7 @@ resource "google_compute_firewall" "spinnaker-jenkins-fw" {
 
   allow {
     protocol = "tcp"
-    ports    = ["80"]
+    ports    = ["80","22"]
   }
 
   source_tags = ["spinnaker-vm"]
@@ -109,7 +109,6 @@ resource "google_compute_region_backend_service" "redis" {
 
   backend {
     group = "${google_compute_instance_group_manager.redis.instance_group}"
-
   }
 
   health_checks = ["${google_compute_health_check.redis.self_link}"]
@@ -123,4 +122,27 @@ resource "google_compute_forwarding_rule" "redis" {
   subnetwork = "${google_compute_subnetwork.spinnaker.self_link}"
   ip_address = "${var.redis_ip}"
   ports = ["6379"]
+}
+
+resource "google_compute_region_backend_service" "jenkins" {
+  name        = "${var.deployment_name}-jenkins-backend"
+  protocol    = "TCP"
+  timeout_sec = 10
+  session_affinity = "CLIENT_IP"
+
+  backend {
+    group = "${google_compute_instance_group_manager.jenkins.instance_group}"
+  }
+
+  health_checks = ["${google_compute_health_check.jenkins.self_link}"]
+}
+
+resource "google_compute_forwarding_rule" "jenkins" {
+  name       = "jenkins-instance-group"
+  load_balancing_scheme = "INTERNAL"
+  backend_service = "${google_compute_region_backend_service.jenkins.self_link}"
+  network    = "${google_compute_network.spinnaker.self_link}"
+  subnetwork = "${google_compute_subnetwork.spinnaker.self_link}"
+  ip_address = "${var.jenkins_ip}"
+  ports = ["80"]
 }

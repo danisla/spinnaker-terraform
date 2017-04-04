@@ -41,6 +41,11 @@ variable spinnaker_image {
   default = "spinnaker-packer-1491247378"
 }
 
+variable jenkins_machine_type {
+  description = "Machine type for the VM running Jenkins"
+  default = "n1-standard-1"
+}
+
 variable jenkins_ip {
   description = "Internal address for the Jenkins instance"
   default = "10.254.0.201"
