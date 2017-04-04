@@ -12,20 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-resource "google_compute_network" "spinnaker-network" {
-  name                    = "spinnaker-network"
+resource "google_compute_network" "spinnaker" {
+  name                    = "spinnaker"
   auto_create_subnetworks = "false"
 }
 
-resource "google_compute_subnetwork" "spinnaker-subnetwork" {
-  name          = "${var.deployment_name}-spinnaker-subnetwork"
+resource "google_compute_subnetwork" "spinnaker" {
+  name          = "${var.deployment_name}-spinnaker"
   ip_cidr_range = "${var.cidr_range}"
-  network       = "${google_compute_network.spinnaker-network.self_link}"
+  network       = "${google_compute_network.spinnaker.self_link}"
 }
 
 resource "google_compute_firewall" "spinnaker-vm-fw" {
   name    = "spinnaker-vm-ssh"
-  network = "${google_compute_network.spinnaker-network.name}"
+  network = "${google_compute_network.spinnaker.name}"
 
   allow {
     protocol = "tcp"
@@ -38,7 +38,7 @@ resource "google_compute_firewall" "spinnaker-vm-fw" {
 
 resource "google_compute_firewall" "spinnaker-redis-fw" {
   name    = "redis-vm"
-  network = "${google_compute_network.spinnaker-network.name}"
+  network = "${google_compute_network.spinnaker.name}"
 
   allow {
     protocol = "tcp"
@@ -49,9 +49,22 @@ resource "google_compute_firewall" "spinnaker-redis-fw" {
   target_tags = ["redis-vm"]
 }
 
+resource "google_compute_firewall" "spinnaker-redis-hc" {
+  name    = "redis-hc"
+  network = "${google_compute_network.spinnaker.name}"
+
+  allow {
+    protocol = "tcp"
+    ports    = ["6379"]
+  }
+
+  source_ranges = ["130.211.0.0/22"]
+  target_tags = ["redis-vm"]
+}
+
 resource "google_compute_firewall" "spinnaker-jenkins-fw" {
   name    = "jenkins-vm-from-spinnaker"
-  network = "${google_compute_network.spinnaker-network.name}"
+  network = "${google_compute_network.spinnaker.name}"
 
   allow {
     protocol = "tcp"
@@ -64,7 +77,7 @@ resource "google_compute_firewall" "spinnaker-jenkins-fw" {
 
 resource "google_compute_firewall" "spinnaker-jenkins-hc" {
   name    = "jenkins-vm-hc"
-  network = "${google_compute_network.spinnaker-network.name}"
+  network = "${google_compute_network.spinnaker.name}"
 
   allow {
     protocol = "tcp"
@@ -77,7 +90,7 @@ resource "google_compute_firewall" "spinnaker-jenkins-hc" {
 
 resource "google_compute_firewall" "spinnaker-hc" {
   name    = "spinnaker-vm-hc"
-  network = "${google_compute_network.spinnaker-network.name}"
+  network = "${google_compute_network.spinnaker.name}"
 
   allow {
     protocol = "tcp"
@@ -86,4 +99,28 @@ resource "google_compute_firewall" "spinnaker-hc" {
 
   source_ranges = ["130.211.0.0/22"]
   target_tags = ["spinnaker-vm"]
+}
+
+resource "google_compute_region_backend_service" "redis" {
+  name        = "${var.deployment_name}-redis-backend"
+  protocol    = "TCP"
+  timeout_sec = 10
+  session_affinity = "CLIENT_IP"
+
+  backend {
+    group = "${google_compute_instance_group_manager.redis.instance_group}"
+
+  }
+
+  health_checks = ["${google_compute_health_check.redis.self_link}"]
+}
+
+resource "google_compute_forwarding_rule" "redis" {
+  name       = "redis-instance-group"
+  load_balancing_scheme = "INTERNAL"
+  backend_service = "${google_compute_region_backend_service.redis.self_link}"
+  network    = "${google_compute_network.spinnaker.self_link}"
+  subnetwork = "${google_compute_subnetwork.spinnaker.self_link}"
+  ip_address = "${var.redis_ip}"
+  ports = ["6379"]
 }
